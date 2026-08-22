@@ -30,10 +30,10 @@ graph TD
 
     A[Client] -->|Credentials| B[Post credentials to register/login]
     B --> C{Check credentials}
-    C -->|Valid| D[Generate Session ID & sign JWTs]:::secure
-    C -->|Invalid| E[Return 401/409 Error Response]:::danger
+    C -->|Valid| D["Generate Session ID & sign JWTs"]:::secure
+    C -->|Invalid| E["Return 401/409 Error Response"]:::danger
     D --> F[Create Database Session Record]
-    D --> G[Set HttpOnly Cookies accessToken & refreshToken]
+    D --> G["Set HttpOnly Cookies accessToken & refreshToken"]
     D --> H[Return Success JSON with Access Token]
 ```
 
@@ -46,8 +46,8 @@ graph TD
 
     A[Client Request] -->|Read Access Token from Cookies or Headers| B{Verify JWT Signature}
     B -->|Valid| C{Check if sessionId exists in DB}
-    B -->|Invalid / Expired| D[Clear Cookies & Return 401 Unauthorized]:::danger
-    C -->|Yes (Session Active)| E[Grant Route Access & Return User Context]:::secure
+    B -->|Invalid / Expired| D["Clear Cookies & Return 401 Unauthorized"]:::danger
+    C -->|Yes (Session Active)| E["Grant Route Access & Return User Context"]:::secure
     C -->|No (Session Revoked)| D
 ```
 
@@ -60,12 +60,12 @@ graph TD
 
     A[Client Refresh Request] -->|Read Refresh Token Cookie| B{Verify Signature & Expiration}
     B -->|Valid| C{Check if Token matches current in DB Session}
-    B -->|Invalid / Expired| D[Clear Cookies, Revoke Session & Return 401]:::danger
-    C -->|Yes (Match)| E[Generate New Access & Rotated Refresh Token]:::secure
+    B -->|Invalid / Expired| D["Clear Cookies, Revoke Session & Return 401"]:::danger
+    C -->|Yes (Match)| E["Generate New Access & Rotated Refresh Token"]:::secure
     E --> F[Update DB Session with new Rotated Refresh Token]
     E --> G[Set New HTTP-only Cookies]
     E --> H[Return Success JSON with New Access Token]
-    C -->|No (Replay/Theft Detected)| I[Wipe Session & Invalidate All Tokens]:::danger
+    C -->|No (Replay/Theft Detected)| I["Wipe Session & Invalidate All Tokens"]:::danger
 ```
 
 ### 4. Session Revocation & Logout Flow
@@ -86,7 +86,7 @@ graph TD
     B -->|Revoke Specific Session| F[Delete Target sessionId from DB]
     F --> G{Is Target Current Device?}
     G -->|Yes| D
-    G -->|No| H[Keep Cookies & Terminate Session Remotely]:::secure
+    G -->|No| H["Keep Cookies & Terminate Session Remotely"]:::secure
 ```
 
 ---
