@@ -17,49 +17,76 @@ This system implements robust modern security protocols including **Refresh Toke
 
 ---
 
-## 📊 System Architecture & Flowchart
+## 📊 System Architecture & Flowcharts
 
+For better readability and modular visibility, the system's operational flows are separated below:
+
+### 1. Registration & Password Login Flow
 ```mermaid
 graph TD
-    %% Styling
     classDef secure fill:#d4edda,stroke:#28a745,stroke-width:2px;
     classDef process fill:#d1ecf1,stroke:#17a2b8,stroke-width:2px;
     classDef danger fill:#f8d7da,stroke:#dc3545,stroke-width:2px;
 
-    %% Flows
-    subgraph Authentication [1. Registration & Password Login]
-        A[Client] -->|Credentials| B(register/login)
-        B -->|Hash SHA-256| C{Valid Credentials?}
-        C -->|Yes| D[Generate Session ID & JWTs]:::secure
-        C -->|No| E[Return 401/409 Error]:::danger
-        D -->|Create DB Session| F[(sessions collection)]
-        D -->|Set Cookies & Send Token| A
-    end
+    A[Client] -->|Credentials| B[Post credentials to register/login]
+    B --> C{Check credentials}
+    C -->|Valid| D[Generate Session ID & sign JWTs]:::secure
+    C -->|Invalid| E[Return 401/409 Error Response]:::danger
+    D --> F[Create Database Session Record]
+    D --> G[Set HttpOnly Cookies accessToken & refreshToken]
+    D --> H[Return Success JSON with Access Token]
+```
 
-    subgraph Token Verification [2. Protected Route Access]
-        G[Protected Req] -->|Read Access Token Cookie| H{Verify JWT Signature}
-        H -->|Valid| I{Session ID Exists in DB?}
-        I -->|Yes| J[Grant Access & Return User]:::secure
-        I -->|No / Revoked| K[Clear Cookies & Return 401]:::danger
-        H -->|Expired / Invalid| K
-    end
+### 2. Protected Route Verification Flow
+```mermaid
+graph TD
+    classDef secure fill:#d4edda,stroke:#28a745,stroke-width:2px;
+    classDef process fill:#d1ecf1,stroke:#17a2b8,stroke-width:2px;
+    classDef danger fill:#f8d7da,stroke:#dc3545,stroke-width:2px;
 
-    subgraph Refresh Token Rotation [3. Refresh Token Rotation - RTR]
-        L[Refresh Req] -->|Read Refresh Token Cookie| M{Verify Refresh Token}
-        M -->|Valid| N{Is Token Current in DB Session?}
-        N -->|Yes| O[Generate New Access & Rotated Refresh Token]:::secure
-        O -->|Update DB Session with new token| F
-        O -->|Set New Cookies| A
-        N -->|No / Replayed| P[Revoke Entire Session & Return 401]:::danger
-        M -->|Expired / Invalid| P
-    end
+    A[Client Request] -->|Read Access Token from Cookies or Headers| B{Verify JWT Signature}
+    B -->|Valid| C{Check if sessionId exists in DB}
+    B -->|Invalid / Expired| D[Clear Cookies & Return 401 Unauthorized]:::danger
+    C -->|Yes (Session Active)| E[Grant Route Access & Return User Context]:::secure
+    C -->|No (Session Revoked)| D
+```
 
-    subgraph Session Management [4. Session Revocation]
-        Q[Logout / Revoke Session] -->|Delete Session from DB| F
-        Q -->|Clear Cookies| A
-        R[Logout All Devices] -->|Delete All User Sessions| F
-        R -->|Clear Cookies| A
-    end
+### 3. Refresh Token Rotation (RTR) Flow
+```mermaid
+graph TD
+    classDef secure fill:#d4edda,stroke:#28a745,stroke-width:2px;
+    classDef process fill:#d1ecf1,stroke:#17a2b8,stroke-width:2px;
+    classDef danger fill:#f8d7da,stroke:#dc3545,stroke-width:2px;
+
+    A[Client Refresh Request] -->|Read Refresh Token Cookie| B{Verify Signature & Expiration}
+    B -->|Valid| C{Check if Token matches current in DB Session}
+    B -->|Invalid / Expired| D[Clear Cookies, Revoke Session & Return 401]:::danger
+    C -->|Yes (Match)| E[Generate New Access & Rotated Refresh Token]:::secure
+    E --> F[Update DB Session with new Rotated Refresh Token]
+    E --> G[Set New HTTP-only Cookies]
+    E --> H[Return Success JSON with New Access Token]
+    C -->|No (Replay/Theft Detected)| I[Wipe Session & Invalidate All Tokens]:::danger
+```
+
+### 4. Session Revocation & Logout Flow
+```mermaid
+graph TD
+    classDef secure fill:#d4edda,stroke:#28a745,stroke-width:2px;
+    classDef process fill:#d1ecf1,stroke:#17a2b8,stroke-width:2px;
+    classDef danger fill:#f8d7da,stroke:#dc3545,stroke-width:2px;
+
+    A[Logout Request] --> B{Choose Logout Type}
+    
+    B -->|Standard Logout| C[Delete Current Session from DB]
+    C --> D[Clear Cookies]
+    
+    B -->|Logout From All Devices| E[Delete All Sessions for User ID]
+    E --> D
+    
+    B -->|Revoke Specific Session| F[Delete Target sessionId from DB]
+    F --> G{Is Target Current Device?}
+    G -->|Yes| D
+    G -->|No| H[Keep Cookies & Terminate Session Remotely]:::secure
 ```
 
 ---
