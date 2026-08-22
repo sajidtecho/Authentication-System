@@ -506,20 +506,37 @@ export async function sendOTP(req, res) {
         );
 
         let sent = false;
-        if (config.EMAIL_USER && config.EMAIL_PASS) {
+        const useOAuth2 = process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_REFRESH_TOKEN;
+        const useSMTP = config.EMAIL_USER && config.EMAIL_PASS;
+
+        if (useOAuth2 || useSMTP) {
             try {
-                const transporter = nodemailer.createTransport({
-                    host: config.EMAIL_HOST,
-                    port: config.EMAIL_PORT,
-                    secure: config.EMAIL_PORT === 465,
-                    auth: {
-                        user: config.EMAIL_USER,
-                        pass: config.EMAIL_PASS
-                    }
-                });
+                let transporter;
+                if (useOAuth2) {
+                    transporter = nodemailer.createTransport({
+                        service: "gmail",
+                        auth: {
+                            type: "OAuth2",
+                            user: process.env.GOOGLE_USER || config.EMAIL_USER,
+                            clientId: process.env.GOOGLE_CLIENT_ID,
+                            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+                            refreshToken: process.env.GOOGLE_REFRESH_TOKEN
+                        }
+                    });
+                } else {
+                    transporter = nodemailer.createTransport({
+                        host: config.EMAIL_HOST,
+                        port: config.EMAIL_PORT,
+                        secure: config.EMAIL_PORT === 465,
+                        auth: {
+                            user: config.EMAIL_USER,
+                            pass: config.EMAIL_PASS
+                        }
+                    });
+                }
 
                 await transporter.sendMail({
-                    from: `"Authentication System" <${config.EMAIL_USER}>`,
+                    from: `"Authentication System" <${process.env.GOOGLE_USER || config.EMAIL_USER}>`,
                     to: email,
                     subject: "Your Authentication OTP",
                     text: `Your OTP is: ${otp}. It is valid for 5 minutes.`,
