@@ -113,11 +113,17 @@ MONGO_URI=your_mongodb_connection_string
 # JWT Signing Secret
 JWT_SECRET=your_jwt_secret_hash
 
-# Nodemailer SMTP Configuration (Optional - Falls back to dev console output if not set)
+# Nodemailer SMTP Configuration (Option A - Standard SMTP)
 EMAIL_HOST=smtp.gmail.com
 EMAIL_PORT=587
 EMAIL_USER=your_email@gmail.com
 EMAIL_PASS=your_email_app_password
+
+# Nodemailer Google OAuth2 Configuration (Option B - Recommended)
+GOOGLE_USER=your_email@gmail.com
+GOOGLE_CLIENT_ID=your_oauth_client_id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your_oauth_client_secret
+GOOGLE_REFRESH_TOKEN=your_oauth_refresh_token
 ```
 
 ---
