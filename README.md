@@ -47,8 +47,8 @@ graph TD
     A[Client Request] -->|Read Access Token from Cookies or Headers| B{Verify JWT Signature}
     B -->|Valid| C{Check if sessionId exists in DB}
     B -->|Invalid / Expired| D["Clear Cookies & Return 401 Unauthorized"]:::danger
-    C -->|Yes (Session Active)| E["Grant Route Access & Return User Context"]:::secure
-    C -->|No (Session Revoked)| D
+    C -->|Yes - Session Active| E["Grant Route Access & Return User Context"]:::secure
+    C -->|No - Session Revoked| D
 ```
 
 ### 3. Refresh Token Rotation (RTR) Flow
@@ -61,11 +61,11 @@ graph TD
     A[Client Refresh Request] -->|Read Refresh Token Cookie| B{Verify Signature & Expiration}
     B -->|Valid| C{Check if Token matches current in DB Session}
     B -->|Invalid / Expired| D["Clear Cookies, Revoke Session & Return 401"]:::danger
-    C -->|Yes (Match)| E["Generate New Access & Rotated Refresh Token"]:::secure
+    C -->|Yes - Match| E["Generate New Access & Rotated Refresh Token"]:::secure
     E --> F[Update DB Session with new Rotated Refresh Token]
     E --> G[Set New HTTP-only Cookies]
     E --> H[Return Success JSON with New Access Token]
-    C -->|No (Replay/Theft Detected)| I["Wipe Session & Invalidate All Tokens"]:::danger
+    C -->|No - Replay/Theft Detected| I["Wipe Session & Invalidate All Tokens"]:::danger
 ```
 
 ### 4. Session Revocation & Logout Flow
