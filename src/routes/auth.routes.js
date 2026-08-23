@@ -1,5 +1,6 @@
 import { Router } from "express";
 import * as authController from "../controllers/auth.controller.js";
+import { requireAuth } from "../middlewares/auth.middleware.js";
 
 const authRouter = Router();
 
@@ -7,7 +8,7 @@ const authRouter = Router();
 
 /**
  *POST/api/auth/register
-*/
+ */
 authRouter.post("/register", authController.register);
 
 /**
@@ -38,21 +39,21 @@ authRouter.post("/logout", authController.logout);
 /**
  * POST /api/auth/logout-all
  */
-authRouter.post("/logout-all", authController.logoutAll);
+authRouter.post("/logout-all", requireAuth, authController.logoutAll);
 
 /**
  * GET /api/auth/sessions
  */
-authRouter.get("/sessions", authController.getSessions);
+authRouter.get("/sessions", requireAuth, authController.getSessions);
 
 /**
  * DELETE /api/auth/sessions/:sessionId
  */
-authRouter.delete("/sessions/:sessionId", authController.deleteSession);
+authRouter.delete("/sessions/:sessionId", requireAuth, authController.deleteSession);
 
 /***
  * GET /api/auth/get-me
  */
-authRouter.get("/get-me", authController.getMe);
+authRouter.get("/get-me", requireAuth, authController.getMe);
 
 export default authRouter;

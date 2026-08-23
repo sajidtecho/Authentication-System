@@ -6,6 +6,7 @@ import jwt from "jsonwebtoken";
 import config from "../config/config.js";
 import mongoose from "mongoose";
 import nodemailer from "nodemailer";
+import bcrypt from "bcryptjs";
 
 /**
  * @function register
@@ -34,8 +35,8 @@ export async function register(req, res) {
         });
     }
 
-    // Hash the password with SHA-256 for secure storage in the database
-    const hashedPassword = crypto.createHash("sha256").update(password).digest("hex");
+    // Hash the password with bcrypt for secure storage in the database
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = await userModel.create({
         username,
@@ -108,37 +109,12 @@ export async function register(req, res) {
  */
 export async function getMe(req, res) {
     try {
-        const token = req.cookies.accessToken || req.cookies.token || req.headers.authorization?.split(" ")[1];
-
-        if (!token) {
-            return res.status(401).json({
-                message: "token not found"
-            });
-        }
-
-        const decoded = jwt.verify(token, config.JWT_SECRET);
-        
-        // Query database to ensure session was not revoked or deleted
-        const sessionExists = await sessionModel.exists({ _id: decoded.sessionId });
-        if (!sessionExists) {
-            return res.status(401).json({
-                message: "Session expired or revoked"
-            });
-        }
-
-        const user = await userModel.findById(decoded.id).select("-password");
-        if (!user) {
-            return res.status(404).json({
-                message: "User not found"
-            });
-        }
-
         res.status(200).json({
-            user
+            user: req.user
         });
     } catch (error) {
-        return res.status(401).json({
-            message: "Invalid or expired token"
+        return res.status(500).json({
+            message: error.message
         });
     }
 }
@@ -170,8 +146,8 @@ export async function login(req, res) {
         }
 
         // Cryptographically compare input password against stored hashedPassword
-        const hashedPassword = crypto.createHash("sha256").update(password).digest("hex");
-        if (user.password !== hashedPassword) {
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
             return res.status(401).json({
                 message: "Invalid credentials"
             });
@@ -352,17 +328,9 @@ export async function logout(req, res) {
  * @why Enables user security controls (e.g. "Log out of all devices" if a device is lost or compromised).
  */
 export async function logoutAll(req, res) {
-    const token = req.cookies.accessToken || req.cookies.refreshToken || req.headers.authorization?.split(" ")[1];
-    if (!token) {
-        return res.status(401).json({
-            message: "Not authenticated"
-        });
-    }
-
     try {
-        const decoded = jwt.verify(token, config.JWT_SECRET);
         // Wipe all sessions associated with the authenticated user ID
-        await sessionModel.deleteMany({ userId: decoded.id });
+        await sessionModel.deleteMany({ userId: req.user._id });
         
         res.clearCookie("accessToken");
         res.clearCookie("refreshToken");
@@ -371,8 +339,8 @@ export async function logoutAll(req, res) {
             message: "Logged out from all devices successfully"
         });
     } catch (error) {
-        return res.status(401).json({
-            message: "Invalid or expired token"
+        return res.status(500).json({
+            message: error.message
         });
     }
 }
@@ -386,39 +354,23 @@ export async function logoutAll(req, res) {
  * @why Promotes security transparency, allowing users to verify active devices accessing their account.
  */
 export async function getSessions(req, res) {
-    const token = req.cookies.accessToken || req.headers.authorization?.split(" ")[1];
-    if (!token) {
-        return res.status(401).json({
-            message: "Not authenticated"
-        });
-    }
-
     try {
-        const decoded = jwt.verify(token, config.JWT_SECRET);
-        
-        const currentSessionExists = await sessionModel.exists({ _id: decoded.sessionId });
-        if (!currentSessionExists) {
-            return res.status(401).json({
-                message: "Session expired or revoked"
-            });
-        }
-
-        const sessions = await sessionModel.find({ userId: decoded.id }).select("-token");
+        const sessions = await sessionModel.find({ userId: req.user._id }).select("-token");
         
         const mappedSessions = sessions.map(session => ({
             _id: session._id,
             userAgent: session.userAgent,
             ipAddress: session.ipAddress,
             createdAt: session.createdAt,
-            isCurrent: session._id.toString() === decoded.sessionId
+            isCurrent: session._id.toString() === req.session._id.toString()
         }));
 
         res.status(200).json({
             sessions: mappedSessions
         });
     } catch (error) {
-        return res.status(401).json({
-            message: "Invalid or expired token"
+        return res.status(500).json({
+            message: error.message
         });
     }
 }
@@ -432,15 +384,7 @@ export async function getSessions(req, res) {
  * @why Provides granular security controls, letting users revoke access from specific external devices.
  */
 export async function deleteSession(req, res) {
-    const token = req.cookies.accessToken || req.headers.authorization?.split(" ")[1];
-    if (!token) {
-        return res.status(401).json({
-            message: "Not authenticated"
-        });
-    }
-
     try {
-        const decoded = jwt.verify(token, config.JWT_SECRET);
         const { sessionId } = req.params;
 
         if (!sessionId) {
@@ -449,7 +393,7 @@ export async function deleteSession(req, res) {
             });
         }
 
-        const session = await sessionModel.findOne({ _id: sessionId, userId: decoded.id });
+        const session = await sessionModel.findOne({ _id: sessionId, userId: req.user._id });
         if (!session) {
             return res.status(404).json({
                 message: "Session not found"
@@ -458,7 +402,7 @@ export async function deleteSession(req, res) {
 
         await sessionModel.deleteOne({ _id: sessionId });
 
-        const isCurrentSession = sessionId === decoded.sessionId;
+        const isCurrentSession = sessionId === req.session._id.toString();
         if (isCurrentSession) {
             res.clearCookie("accessToken");
             res.clearCookie("refreshToken");
@@ -469,8 +413,8 @@ export async function deleteSession(req, res) {
             isCurrentSession
         });
     } catch (error) {
-        return res.status(401).json({
-            message: "Invalid or expired token"
+        return res.status(500).json({
+            message: error.message
         });
     }
 }
@@ -599,10 +543,19 @@ export async function loginOTP(req, res) {
         let isNewUser = false;
 
         if (!user) {
-            // Automatically register the user if they don't exist under this email
-            const username = email.split("@")[0] + "_" + Math.floor(1000 + Math.random() * 9000);
+            // Automatically register the user if they don't exist under this email.
+            // Solve potential username collisions by checking if the generated username exists.
+            let username;
+            let exists = true;
+            const emailPrefix = email.split("@")[0];
+
+            while (exists) {
+                username = `${emailPrefix}_${Math.floor(1000 + Math.random() * 9000)}`;
+                exists = await userModel.exists({ username });
+            }
+
             const randomPassword = crypto.randomBytes(16).toString("hex");
-            const hashedPassword = crypto.createHash("sha256").update(randomPassword).digest("hex");
+            const hashedPassword = await bcrypt.hash(randomPassword, 10);
 
             user = await userModel.create({
                 username,
